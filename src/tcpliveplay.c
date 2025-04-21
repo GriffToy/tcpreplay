@@ -709,18 +709,30 @@ got_packet(_U_ u_char *args, _U_ const struct pcap_pkthdr *header, const u_char 
         printf("Remote Packet Expectation met.\nProceeding in replay....\n");
         // printf("SYN-ACKed Random SEQ set!\n");
         initial_rseq = ntohl(tcphdr->th_seq);
+        FILE *fptr;
+        fptr = fopen("got_packet_debug.txt", "w");
+        char buffer[1024];
+        sprintf(buffer, "Remote packet index %u initial_rseq is %u\n\n", sched_index, initial_rseq);
+        fprintf(fptr, "%s", buffer);
         // printf("initial_rseq: %u\n", initial_rseq);
         /* After we receiving the first SYN-ACK, then adjust the entire sched to be absolute rather than relative #s*/
         sched[1].exp_rseq = sched[1].exp_rseq + initial_rseq;
+        sprintf(buffer, "sched[%u].exp_rseq: %u\n", 1, sched[1].exp_rseq);
+        fprintf(fptr, "%s", buffer);
         for (j = 2; j < pkts_scheduled;
              j++) { /* Based on correctly receiving the random SEQ from the SYN-ACK packet, do the following:*/
             if (sched[j].local) { /* Set local ACKs for entire sched to be absolute #s*/
                 sched[j].curr_lack = sched[j].curr_lack + initial_rseq;
+                sprintf(buffer, "sched[%u].curr_lack: %u\n", j, sched[j].curr_lack);
+                fprintf(fptr, "%s", buffer);
             } else if (sched[j].remote) { /* Set remote SEQs for entire sched to be absolute #s*/
                 sched[j].exp_rseq = sched[j].exp_rseq + initial_rseq;
+                sprintf(buffer, "sched[%u].exp_rseq: %u\n", j, sched[j].exp_rseq);
+                fprintf(fptr, "%s", buffer);
             }
         }
         sched_index++; /* Proceed in the schedule*/
+        fclose(fptr);
         return;
     }
 
