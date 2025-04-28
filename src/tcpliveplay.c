@@ -244,8 +244,17 @@ main(int argc, char **argv)
         sched_index++; /* Proceed in the schedule */
     }
 
+    FILE *fptr;
+    fptr = fopen("liveplay_debug.txt", "w");
+    char buffer[1024];
+    sprintf(buffer, "Before main while loop\n");
+    fprintf(fptr, "%s", buffer);
+    fflush(fptr);
     /* Main while loop that handles the decision making and the replay oprations */
     while (sched_index < pkts_scheduled) {
+        sprintf(buffer, "Beginning of main while loop\n");
+        fprintf(fptr, "%s", buffer);
+        fflush(fptr);
         if (!keep_going) { /*Check the timeout variable */
             printf("\n======================================================================\n");
             printf("= TIMEOUT:: Remote host is not responding. You may have crashed      =\n");
@@ -253,11 +262,17 @@ main(int argc, char **argv)
             printf("= changed since the capture was taken resulting in differing         =\n");
             printf("= expectations. Closing replay...                                    =\n");
             printf("======================================================================\n\n");
+            sprintf(buffer, "Timeout hit\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
             break;
         }
         /* tcphdr_rprev carries the last remote tcp header */
         if (tcphdr_rprev == NULL) {
             // printf("FIRST PASS!\n");
+            sprintf(buffer, "FIRST PASS\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
         }
         /* Check if received RST or RST-ACK flagged packets*/
         else if ((tcphdr_rprev->th_flags == TH_RST) || (tcphdr_rprev->th_flags == (TH_RST | TH_ACK))) {
@@ -265,6 +280,9 @@ main(int argc, char **argv)
             printf("+ ERROR:: Remote host has requested to RESET the connection.   +\n");
             printf("+ Closing replay...                                            +\n");
             printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n");
+            sprintf(buffer, "RST received\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
             break;
         }
         /* Do the following if we receive a packet that ACKs for the same ACKing of next packet */
@@ -276,6 +294,9 @@ main(int argc, char **argv)
                    sched_index + 2);
             printf("Next Remote Packet Expectation met.\nProceeding in replay...\n");
             sched_index++;
+            sprintf(buffer, "Next Remote Packet Expectation met.\nProceeding in replay...\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
         }
         /* Do the following if payload does not meet expectation and re-attempt with the remote host for 3 tries*/
         else if (different_payload) {
@@ -286,6 +307,9 @@ main(int argc, char **argv)
             printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n");
             printf("Requesting retransmission.\n Proceeding...\n");
             different_payload = false;
+            sprintf(buffer, "+ WARNING: Remote host is not meeting packet size expectations.               +\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
         }
 
         /* Local Packets */
@@ -293,11 +317,20 @@ main(int argc, char **argv)
             /*Reset alarm timeout*/
             alarm(ALARM_TIMEOUT);
             printf("Sending Local Packet...............	[%u]\n", sched_index + 1);
+            sprintf(buffer, "Sending Local Packet...............	[%u]\n", sched_index + 1);
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
 
             /* edit each packet tcphdr before sending based on the schedule*/
             if (sched_index > 0) {
                 sched[sched_index].tcphdr->th_ack = htonl(sched[sched_index].curr_lack);
+                sprintf(buffer, "Fixing checksums\n");
+                fprintf(fptr, "%s", buffer);
+                fflush(fptr);
                 fix_all_checksum_liveplay(sched[sched_index].iphdr);
+                sprintf(buffer, "Fixed checksums\n");
+                fprintf(fptr, "%s", buffer);
+                fflush(fptr);
             }
 
             /* If 3 attempts of resending was made, then error out to the user */
@@ -307,24 +340,40 @@ main(int argc, char **argv)
                 printf("+ responding as expected. 3 resend attempts are a maximum.     +\n");
                 printf("+ Closing replay...                                            +\n");
                 printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n");
+                sprintf(buffer, "+ ERROR: Re-sent packet [%-u] 3 times, but remote host is not responding +\n", sched_index + 1);
+                fprintf(fptr, "%s", buffer);
+                fflush(fptr);
                 break;
             }
 
             /* If nothing goes wrong, then send the packet scheduled to be sent, then proceed in the schedule */
+            sprintf(buffer, "Caling sendpacket() function\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
             sendpacket(sp, sched[sched_index].packet_ptr, sched[sched_index].pkthdr.len, &sched[sched_index].pkthdr);
             sched[sched_index].sent_counter++; /* Keep track of how many times this specific packet was attempted */
             sched_index++;                     /* proceed */
+            sprintf(buffer, "Called sendpacket() function\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
         }
 
         /* Remote Packets */
         else if (sched[sched_index].remote) {
             alarm(ALARM_TIMEOUT);
             printf("Receiving Packets from remote host...\n");
+            sprintf(buffer, "Receiving Packets from remote host...\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
             pcap_dispatch(live_handle, 1, got_packet, NULL); /* Listen in on NIC for tcp packets */
+            sprintf(buffer, "Returned from pcap_dispatch\n");
+            fprintf(fptr, "%s", buffer);
+            fflush(fptr);
             // printf("pcap_loop returned\n");
         }
     } /* end of main while loop*/
 
+    fclose(fptr);
     pcap_breakloop(live_handle);
 
     pcap_close(live_handle);
